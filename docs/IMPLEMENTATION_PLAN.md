@@ -1,6 +1,6 @@
-# go-job-queue — Unified Roadmap (Codex-Oriented)
+# distributed-job-queue — Unified Roadmap (Codex-Oriented)
 
-This document describes the intended direction and evolution of the `go-job-queue` project.
+This document describes the intended direction and evolution of the `distributed-job-queue` project.
 It is written for AI-assisted development (Codex) to keep implementation decisions consistent
 with the architectural intent.
 
@@ -194,7 +194,7 @@ This phase focuses on operational readiness, scaling, and observability.
 ## Monorepo Directory Structure (Unified)
 
 ```text
-/go-job-queue
+/distributed-job-queue
 ├── /api-service (Go)          # Gin API service
 ├── /worker-service (Go)       # Job worker / orchestrator
 ├── /compute-engine (Rust)     # Optional Phase 2 component

@@ -9,8 +9,8 @@ import (
 	"syscall"
 	"time"
 
-	"go-job-queue/internal/config"
-	"go-job-queue/internal/server"
+	"distributed-job-queue/internal/config"
+	"distributed-job-queue/internal/server"
 )
 
 func main() {
@@ -32,7 +32,7 @@ func main() {
 		shutdownErr <- httpServer.Shutdown(ctx)
 	}()
 
-	log.Printf("go-job-queue api listening on :%s", cfg.Port)
+	log.Printf("distributed-job-queue api listening on :%s", cfg.Port)
 	if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("server error: %v", err)
 	}

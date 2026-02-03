@@ -16,7 +16,7 @@ func NewRouter() http.Handler {
 	})
 
 	r.GET("/", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "go-job-queue api is running"})
+		c.JSON(http.StatusOK, gin.H{"message": "distributed-job-queue api is running"})
 	})
 
 	return r

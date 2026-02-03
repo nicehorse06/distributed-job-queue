@@ -1,4 +1,4 @@
-module go-job-queue
+module distributed-job-queue
 
 go 1.22
 

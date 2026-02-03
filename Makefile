@@ -1,4 +1,4 @@
-APP_NAME=go-job-queue
+APP_NAME=distributed-job-queue
 
 .PHONY: run build test tidy
 
