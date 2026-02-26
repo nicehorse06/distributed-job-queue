@@ -156,17 +156,84 @@ include a small benchmark to justify the added complexity.
 
 ---
 
-## Phase 3 — Distributed Readiness & Deployment (Kubernetes-Friendly)
+## Phase 3 — Distributed Coordination (Raft-Friendly)
 
 ### Goal
-Make the system deployable and scalable in a multi-instance environment without changing core logic.
-This phase focuses on operational readiness, scaling, and observability.
+Make the system operate correctly in a multi-instance environment by introducing a **Raft-based coordination plane**
+implemented in **Golang**, without rewriting the Phase 1 core model.
+
+**Key constraint**: PostgreSQL remains the system of record for job state and results.
+Raft is introduced to replace *coordination concerns* that are awkward to implement purely with database locks.
+
+### Architecture
+- **API Service (Go + Gin)**: unchanged (HTTP, validation, job creation).
+- **Worker Service (Go)**:
+  - continues to claim jobs from PostgreSQL using transactional claiming
+  - integrates with the Raft coordination plane for cluster-wide decisions
+- **Coordination Plane (Go + Raft)**:
+  - leader election
+  - membership/heartbeats (optional, but recommended)
+  - cluster-wide quota tokens (global concurrency)
+  - leader-only maintenance triggers
+- **PostgreSQL**: unchanged (still the source of truth for jobs)
 
 ### Deliverables
-- Container images for API and worker.
+#### 1) Raft Coordination Component (Go)
+- A Raft implementation is used to build a replicated state machine.
+- Responsibilities:
+  - **Leader election**: expose current leader identity
+  - **Global quota**: acquire/release N tokens to enforce cluster-wide concurrency limits
+  - **Leader-only tasks**: allow only the leader to run specific maintenance loops
+- Persistence:
+  - persist Raft log/state (and snapshot if supported/needed) for restarts
+
+#### 2) Worker Integration (Replace DB-as-coordinator, Not DB-as-truth)
+- Worker flow becomes:
+  1. (optional but recommended) acquire quota token from Raft
+  2. claim job from PostgreSQL (transaction + row lock)
+  3. execute job with timeout/retry policy (still owned by worker)
+  4. write job result/state to PostgreSQL
+  5. release quota token to Raft
+
+Notes:
+- Claiming correctness remains at the database boundary.
+- Raft is used to ensure cluster-wide decisions are consistent and single-owner when required.
+
+#### 3) Leader-only Maintenance (Practical Distributed Readiness)
+- Only the Raft leader runs periodic maintenance loops, such as:
+  - requeue "stuck" running jobs (lock expired / exceeded runtime)
+  - promote scheduled jobs whose `next_run_at` is due
+- If leader changes, the new leader takes over without duplicated execution.
+
+#### 4) Failure Handling Rules
+- If Raft is unavailable:
+  - define a strict fallback policy (recommended for correctness):
+    - workers do not claim new jobs unless quota acquisition succeeds
+  - or allow a controlled degraded mode (explicitly documented) with careful risk discussion
+- Avoid retry storms:
+  - keep retries centrally in worker logic (not in Raft)
+  - Raft coordination requests should have short timeouts + backoff
+
+### Phase 3 “Done” Criteria
+- Multiple worker instances can run concurrently.
+- Global concurrency can be bounded cluster-wide (via quota tokens).
+- Leader-only maintenance tasks run exactly once per interval (no duplicates) under leader failover.
+- PostgreSQL job correctness (no double-processing) remains intact under restarts and failures.
+
+---
+
+## Optional — Kubernetes-Friendly Deployment (Previously Phase 3)
+
+### Goal
+Provide Kubernetes deployment assets for running the system in a cluster.
+This is **optional** and should not gate core correctness milestones.
+
+### Deliverables
+- Container images for API and worker (and coord-plane if separated).
 - Deployment manifests (or Helm chart) for:
   - API service
   - Worker service
+  - Coordination plane (Raft)
   - PostgreSQL (dev-only; production would use managed DB)
 - Horizontal scaling:
   - multiple API instances
@@ -180,14 +247,10 @@ This phase focuses on operational readiness, scaling, and observability.
   - worker CPU usage (basic)
   - or custom metrics (queue depth) if available
 
-### Optional Stretch Goal
-- A Go-based Kubernetes operator that scales workers/compute-engine based on queue depth.
-  - This is optional and should not block core phases.
-
-### Phase 3 “Done” Criteria
-- System can run with multiple API/worker replicas.
+### Optional “Done” Criteria
+- System runs with multiple replicas on Kubernetes.
+- Rolling updates/restarts do not corrupt state.
 - No duplicate job processing under scale (correct claiming).
-- Deployed services can be restarted/rolled without corrupting state.
 
 ---
 
@@ -197,6 +260,7 @@ This phase focuses on operational readiness, scaling, and observability.
 /distributed-job-queue
 ├── /api-service (Go)          # Gin API service
 ├── /worker-service (Go)       # Job worker / orchestrator
+├── /coord-plane (Go)          # NEW: Raft-based coordination plane (Phase 3)
 ├── /compute-engine (Rust)     # Optional Phase 2 component
 ├── /proto                     # Shared gRPC definitions
 ├── /migrations                # SQL migrations
@@ -207,16 +271,15 @@ This phase focuses on operational readiness, scaling, and observability.
 
 ## Notes for Codex (Implementation Intent)
 
-* Prefer simple, explicit code over clever abstractions.
-
-* Keep Phase 1 implementation fully functional without Phase 2.
-
-* Phase 2 must not pollute Phase 1 core logic:
-  * route only specific job types to Rust
-  * keep compute engine stateless/pure
-
-* Database correctness is the primary mechanism for coordinating concurrency:
-
-* do not rely on in-memory locks across processes
-
-* Always preserve deterministic behavior under retries and restarts.
+- Prefer simple, explicit code over clever abstractions.
+- Keep Phase 1 implementation fully functional without Phase 2.
+- Phase 2 must not pollute Phase 1 core logic:
+  - Route only specific job types to Rust.
+  - Keep the compute engine stateless/pure.
+- Database correctness is the primary mechanism for coordinating job execution:
+  - Do not rely on in-memory locks across processes.
+- Phase 3 adds Raft for cluster-wide coordination concerns:
+  - Leader election / leader-only maintenance.
+  - Global concurrency quota tokens.
+  - Do not move the core job state machine into Raft in Phase 3.
+- Always preserve deterministic behavior under retries and restarts.
