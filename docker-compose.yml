@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   api:
     build: .
@@ -7,8 +5,16 @@ services:
       - "8080:8080"
     environment:
       - PORT=8080
+      - COMPUTE_ADDR=compute-engine:50051
     depends_on:
       - postgres
+      - compute-engine
+  compute-engine:
+    build:
+      context: .
+      dockerfile: compute-engine/Dockerfile
+    ports:
+      - "50051:50051"
   postgres:
     image: postgres:16-alpine
     environment:

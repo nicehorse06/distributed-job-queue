@@ -9,16 +9,28 @@ import (
 	"syscall"
 	"time"
 
+	"distributed-job-queue/internal/computeclient"
 	"distributed-job-queue/internal/config"
+	computev1 "distributed-job-queue/internal/gen/compute/v1"
 	"distributed-job-queue/internal/server"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 func main() {
 	cfg := config.Load()
 
+	computeConn, err := grpc.Dial(cfg.ComputeAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		log.Fatalf("failed to connect to compute service %q: %v", cfg.ComputeAddr, err)
+	}
+	defer computeConn.Close()
+
+	computeSvc := computeclient.New(computev1.NewComputeServiceClient(computeConn))
+
 	httpServer := &http.Server{
 		Addr:    ":" + cfg.Port,
-		Handler: server.NewRouter(),
+		Handler: server.NewRouter(computeSvc),
 	}
 
 	shutdownErr := make(chan error, 1)

@@ -1,5 +1,23 @@
-/bin/
+# OS / Editor
+.DS_Store
 /.idea/
 /.vscode/
+
+# Logs / temp
 *.log
-.DS_Store
+*.tmp
+*.swp
+
+# Local env files
+.env
+.env.*
+!.env.example
+
+# Go build / test artifacts
+/bin/
+*.test
+*.out
+coverage.out
+
+# Rust build artifacts
+/compute-engine/target/

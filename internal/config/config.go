@@ -4,7 +4,8 @@ import "os"
 
 // Config holds runtime configuration values.
 type Config struct {
-	Port string
+	Port        string
+	ComputeAddr string
 }
 
 // Load reads configuration from environment variables.
@@ -14,5 +15,13 @@ func Load() Config {
 		port = "8080"
 	}
 
-	return Config{Port: port}
+	computeAddr := os.Getenv("COMPUTE_ADDR")
+	if computeAddr == "" {
+		computeAddr = "localhost:50051"
+	}
+
+	return Config{
+		Port:        port,
+		ComputeAddr: computeAddr,
+	}
 }

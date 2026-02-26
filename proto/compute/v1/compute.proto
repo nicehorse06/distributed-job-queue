@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package compute.v1;
+
+option go_package = "distributed-job-queue/internal/gen/compute/v1;computev1";
+
+service ComputeService {
+  rpc Square (SquareRequest) returns (SquareResponse);
+}
+
+message SquareRequest {
+  int64 value = 1;
+}
+
+message SquareResponse {
+  int64 value = 1;
+  int64 square = 2;
+}
