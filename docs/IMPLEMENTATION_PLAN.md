@@ -149,10 +149,29 @@ include a small benchmark to justify the added complexity.
   - p95/p99 latency stability
 - Benchmark should be reproducible locally.
 
+#### 5) Thread Pool Optimization Path (Rust Internal, After Baseline)
+Thread pool tuning belongs to the Rust compute engine internals, not the gRPC API contract.
+To avoid premature optimization, implement this in two steps:
+
+- **Step A — Functional Baseline (required first)**:
+  - ship one CPU-heavy job type end-to-end (Go worker -> gRPC -> Rust -> PostgreSQL)
+  - keep concurrency model simple and explicit (Tokio default/runtime-level concurrency is acceptable)
+  - verify correctness under timeout/retry/restart scenarios
+- **Step B — Performance Enhancement (only after Step A is stable)**:
+  - introduce or tune a dedicated execution pool for CPU-bound tasks
+  - focus on reduced lock contention, better task scheduling, and predictable latency
+  - validate gains with reproducible benchmark deltas (throughput and/or p95/p99)
+
+Notes:
+- This optimization is optional unless benchmark data shows a bottleneck.
+- Preserve stateless and deterministic compute behavior while tuning the execution model.
+
 ### Phase 2 “Done” Criteria
 - One job type is routed to Rust compute engine.
 - System remains correct under failure/retry scenarios.
 - Clear justification for Rust exists (via benchmark or observed behavior).
+- Functional baseline must be complete before enabling advanced thread pool tuning.
+- If thread pool optimization is enabled, benchmark evidence must show measurable improvement.
 
 ---
 
